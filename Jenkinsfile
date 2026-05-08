@@ -11,7 +11,7 @@ pipeline {
     stages {
         stage('git checkout') {
             steps {
-                git branch: 'master', url: 'https://github.com/pr-an/Ekart.git'
+                git branch: 'master', credentialsId: 'github-creds', url: 'https://github.com/pr-an/Ekart.git'
             }
         }
         stage('compile') {
@@ -27,10 +27,7 @@ pipeline {
         stage('SonarQube analysis') {
             steps {
                 withSonarQubeEnv('sonar-scanner') {
-                    sh "${env.SCANNER_HOME}/bin/sonar-scanner \
-                        -Dsonar.projectKey=EKART \
-                        -Dsonar.projectName=EKART \
-                        -Dsonar.java.binaries=target/classes"
+                    sh "${env.SCANNER_HOME}/bin/sonar-scanner -Dsonar.projectKey=EKART -Dsonar.projectName=EKART -Dsonar.java.binaries=target/classes"
                 }
             }
         }
@@ -49,7 +46,7 @@ pipeline {
         }
         stage('deploy to Nexus') {
             steps {
-                withMaven(jdk: 'jdk-17', maven: 'maven3', mavenSettingsConfig: '', traceability: true) {
+                withMaven(globalMavenSettingsConfig: 'global-maven', jdk: 'jdk-17', maven: 'maven3', mavenSettingsConfig: '', traceability: true) {
                     sh "mvn deploy -DskipTests=true"
                 }
             }
@@ -57,33 +54,5 @@ pipeline {
         stage('build and Tag docker image') {
             steps {
                 script {
-                    sh "docker build -t youngminds73/ekart:latest -f docker/Dockerfile ."
+                    sh "docker build -t pran1555/ekart:latest -f docker/Dockerfile ."
                 }
-            }
-        }
-        stage('Push image to Hub') {
-            steps {
-                script {
-                    withCredentials([string(credentialsId: 'dockerhub-pwd', variable: 'dockerhubpwd')]) {
-                        sh 'docker login -u youngminds73 -p ${dockerhubpwd}'
-                    }
-                    sh 'docker push youngminds73/ekart:latest'
-                }
-            }
-        }
-        stage('EKS and Kubectl configuration') {
-            steps {
-                script {
-                    sh 'aws eks update-kubeconfig --region ap-south-1 --name project-cluster'
-                }
-            }
-        }
-        stage('Deploy to k8s') {
-            steps {
-                script {
-                    sh 'kubectl apply -f deploymentservice.yml'
-                }
-            }
-        }
-    }
-}
